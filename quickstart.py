@@ -1,5 +1,6 @@
 from __future__ import print_function
 import os.path
+import sys
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -21,24 +22,35 @@ creds = service_account.Credentials.from_service_account_file(
 
 
 # The ID and range of a sample spreadsheet.
-SAMPLE_SPREADSHEET_ID = '1qJMXQlAlVPCIPUOgU2qeqD0FJlvZ-haiigm7IWqt8Y0'
-# SAMPLE_RANGE_NAME = 'Sheet12!A2:E'
+SAMPLE_SPREADSHEET_ID = '1yzaW4RLlLHc4kgxn1rn2WpaAxsh-g1tLBxhOb1WKIFQ'
+SAMPLE_RANGE_NAME = 'Keepa Data!A2'
+CLEAR_RANGE = 'Keepa Data!A2:E'
+CLEAR_SALES_RANGE = 'Product Research!H2:H'
 
 def main():
     """Shows basic usage of the Sheets API.
     Prints values from a sample spreadsheet.
     """
+    search_words = sys.argv[1]
 
-    aoa = getKeepaLaptop()
+    aoa = getKeepaLaptop(search_words)
 
     service = build('sheets', 'v4', credentials=creds)
 
     # Call the Sheets API
     sheet = service.spreadsheets()
-    result = sheet.values().update(spreadsheetId=SAMPLE_SPREADSHEET_ID,
-                                range="Sheet12!A2",
-                                valueInputOption="USER_ENTERED",
-                                body={"values":aoa}).execute()
+    resultClear = sheet.values().clear( spreadsheetId=SAMPLE_SPREADSHEET_ID,
+                                        range=CLEAR_RANGE,
+                                        body={}).execute()
+    resultSalesClear = sheet.values().clear( spreadsheetId=SAMPLE_SPREADSHEET_ID,
+                                        range=CLEAR_SALES_RANGE,
+                                        body={}).execute()
+                                        
+
+    result = sheet.values().update( spreadsheetId=SAMPLE_SPREADSHEET_ID,
+                                    range=SAMPLE_RANGE_NAME,
+                                    valueInputOption="USER_ENTERED",
+                                    body={"values":aoa}).execute()
  
 if __name__ == '__main__':
     main()
