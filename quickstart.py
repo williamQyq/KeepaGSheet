@@ -31,9 +31,9 @@ def main():
     """Shows basic usage of the Sheets API.
     Prints values from a sample spreadsheet.
     """
-    search_words = sys.argv[1]
+    # search_words = sys.argv[1]
 
-    aoa = getKeepaLaptop(search_words)
+    aoa = getKeepaLaptop()
 
     service = build('sheets', 'v4', credentials=creds)
 
