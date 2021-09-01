@@ -118,7 +118,7 @@ class Laptops:
 
 def getKeepaLaptop():
     # enter real access key here
-    accesskey = 'ep1re2emp4vq52o7o0cmrtp6fkrkv3m6mrjqu7btspqst3arj5koivj46gc96kel'
+    accesskey = ''
     api = keepa.Keepa(accesskey)
 
     product_parms = {
