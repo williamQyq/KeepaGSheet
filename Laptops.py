@@ -1,167 +1,83 @@
-import enum
-from os import access
-from re import M
 import keepa
 import numpy as np
 import datetime
-from numpy.core.fromnumeric import prod, product
-from numpy.core.numeric import NaN
-from numpy.lib.function_base import append
 import math
 import re
-import pandas as pd
 
 
 class Laptops:
-    # class attributes
-    CONST_INDEX = 0
-    CONST_TUPLE_DIC = 1
 
-    def __init__(self, search):
-
+    def __init__(self, searchKeyWords, maxSalesRank=15000):
         self.product_parms = {
             'categories_include': [565108, 13896615011, 13896609011],
-            'title': "",
-            'current_SALES_lte': 20000
+            'title': searchKeyWords,
+            'current_SALES_lte': maxSalesRank
         }
-        # enter real access key here
-        self.accesskey = 'ep1re2emp4vq52o7o0cmrtp6fkrkv3m6mrjqu7btspqst3arj5koivj46gc96kel'
+        self.__accesskey = 'ep1re2emp4vq52o7o0cmrtp6fkrkv3m6mrjqu7btspqst3arj5koivj46gc96kel'
 
-        if search:
-            self.product_parms["title"] = search
+    def __getKeepaApi(self):
+        return keepa.Keepa(self.__accesskey)
 
-        self.initial_set(self.accesskey)
+    def getSearchedProductDetail(self):
+        aoa = []  # result array of array
+        keepa = self.__getKeepaApi()
+        asins = keepa.product_finder(self.product_parms)
+        products = keepa.query(asins, offers=20)
 
-    def initial_set(self, accesskey):
-        api = keepa.Keepa(accesskey)
-        products_asins = api.product_finder(self.product_parms)
-        self.products = api.query(products_asins)
+        lastMonth = datetime.datetime.now() - datetime.timedelta(30)
+        lastWeek = datetime.datetime.now() - datetime.timedelta(7)
+        today = datetime.datetime.now()
 
-    def get_asins(self):
-        asins = []
-        for product in enumerate(self.products):
-            asins.append(product[self.CONST_TUPLE_DIC]['asin'])
-        return asins
+        for index, product in enumerate(products):
+            li = []
 
-    def get_titles(self):
-        titles = []
-        for product in enumerate(self.products):
+            salesRankDataframe = product['data']['df_SALES']
+            curSalesRank = salesRankDataframe['value'].tail(1).item()
 
-            titles.append(product[self.CONST_TUPLE_DIC]['title'])
+            # price Of New Condition Product Dataframe
+            priceOfNewDF = product['data']['df_NEW']
+            # price Of Avg Cur Month New Condition Product
+            priceOfAvgMonNewDF = priceOfNewDF.loc[lastMonth:today]
+            meanPriceOfAvgMonNew = priceOfAvgMonNewDF["value"].mean()
 
-        return titles
+            if(math.isnan(meanPriceOfAvgMonNew)):
+                # if price records less than a month, get the avg of all price value
+                meanPriceOfAvgMonNew = priceOfNewDF["value"].mean()
+                if(math.isnan(meanPriceOfAvgMonNew)):
+                    # if no price record, set 0.00
+                    meanPriceOfAvgMonNew = float(0.00)
 
-    def get_salesRanks(self):
-        sales_ranks = []
-        for product in enumerate(self.products):
-            df_sales = product[self.CONST_TUPLE_DIC]['data']['df_SALES']
-            current_sale = df_sales['value'].tail(1).item()
-            sales_ranks.append(current_sale)
-        return sales_ranks
+            estimateSales = self.getSalesFigureEst(curSalesRank)
+            productSpeci = self.getVariant(product["title"])
+            li.append(product["asin"])
+            li.append(product["title"])
+            li.append(curSalesRank)
+            li.append(meanPriceOfAvgMonNew)
+            li.append(productSpeci)
+            li.append(round(estimateSales, 0))
+            aoa.append(li)
 
-    def get_meanNewPrice(self):
-        meanNewPrices = []
-        # date var
-        last_30date = datetime.datetime.now() - datetime.timedelta(30)
-        last_5date = datetime.datetime.now() - datetime.timedelta(5)
-        now_date = datetime.datetime.now()
+        return aoa
 
-        for product in enumerate(self.products):
-            df_newPrice = product[self.CONST_TUPLE_DIC]['data']['df_NEW']
-            df_newPrice_30days = df_newPrice.loc[last_30date:now_date]
-            mean_newPrice = df_newPrice_30days["value"].mean()
-            if(math.isnan(mean_newPrice)):
-                mean_newPrice = df_newPrice["value"].mean()
-                if(math.isnan(mean_newPrice)):
-                    mean_newPrice = float(0.00)
-            meanNewPrices.append(mean_newPrice)
-        return meanNewPrices
+    def getSalesFigureEst(self, salesRank):
+        sr = []
+        for i in range(15):
+            sr.append((i+1)*1000)
+        sn = [494, 247, 159, 125, 105, 85, 65, 55, 53, 50, 48, 46, 44, 42, 40]
 
-    def get_newPrice(self):
-        for product in enumerate(self.products):
-            df_newPrice = product[self.CONST_TUPLE_DIC]['data']['df_NEW']
-            newPrices_df = pd.concat(df_newPrice)
-        return newPrices_df
+        coef = np.polyfit(sr, sn, 3)
 
-    def get_variants(self):
-        variants = []
-        ram_size = ""
-        ssd_size = ""
-        hdd_size = ""
+        return np.polyval(coef, salesRank)
 
-        for title in self.get_titles():
-            ram = re.search("(\d*)\s?GB\s?(?i:memory|ram|ddr4)", title, re.I)
-            if ram:
-                ram_size = ram.group(1)
+    def getVariant(self, title):
+        ramReg = re.search("(\d*)\s?GB\s?(?i)(memory|ram|ddr4|Storage)", title, re.I)
+        ssdReg = re.search(
+            "(\d*)\s?(GB|TB)\s?(?i)(ssd|pcie|nvme|solid state|m.2)", title, re.I)
+        hddReg = re.search(
+            "(\d*)\s?(GB|TB)\s?(?i)(hdd|hard drive)", title, re.I)
 
-            ssd = re.search(
-                "(\d*)\s?(?i:GB|TB)\s?(?i:ssd|pcie|nvme|solid state)", title, re.I)
-            if ssd:
-                ssd_size = ssd.group(1)
+        ram = 0 if ramReg is None else ramReg.group(1)
+        ssd = 0 if ssdReg is None else ssdReg.group(1)
+        hdd = 0 if hddReg is None else hddReg.group(1)
 
-            hdd = re.search(
-                "(\d*)\s?(?i:GB|TB)\s?(?i:hdd|hard drive)", title, re.I)
-            if hdd:
-                hdd_size = hdd.group(1)
-                variant = f'{ram_size}GB Ram | {ssd_size}GB/TB SSD + {hdd_size} GB/TB HDD'
-            else:
-                variant = f'{ram_size}GB Ram | {ssd_size}GB/TB SSD'
-
-            variants.append(variant)
-        return variants
-
-
-# l=Laptops("HP Envy 17.3 i7 1165G7")
-# asins = l.get_asins()
-# titles = l.get_titles()
-# variants = l.get_variants()
-
-def getKeepaLaptop():
-    # enter real access key here
-    accesskey = ''
-    api = keepa.Keepa(accesskey)
-
-    product_parms = {
-        'categories_include': [565108, 13896615011, 13896609011],
-        'title': "Asus Zephyrus G14 Ryzen 9",
-        'current_SALES_lte': 50000
-    }
-
-    products_asins = api.product_finder(product_parms)
-    asins = np.asarray(products_asins)
-    products = api.query(asins)
-
-    result = []
-    # print(products[0].keys())
-    for count, product in enumerate(products):
-        li = []
-
-        # date var
-        last_30date = datetime.datetime.now() - datetime.timedelta(30)
-        last_5date = datetime.datetime.now() - datetime.timedelta(5)
-        now_date = datetime.datetime.now()
-
-        # get current sales rank
-        df_sales = product['data']['df_SALES']
-        # df_sales_5days = df_sales.loc[last_5date:now_date]
-        # mean_sale = round(df_sales_5days["value"].mean())
-        current_sale = df_sales['value'].tail(1).item()
-
-        # get New product price df
-        df_newPrice = product['data']['df_NEW']
-        df_newPrice_30days = df_newPrice.loc[last_30date:now_date]
-        mean_newPrice = df_newPrice_30days["value"].mean()
-        if(math.isnan(mean_newPrice)):
-            mean_newPrice = df_newPrice["value"].mean()
-            if(math.isnan(mean_newPrice)):
-                mean_newPrice = float(0.00)
-
-        # prepare upload gSheet array
-        li.append(product['asin'])
-        li.append(product['title'])
-        li.append(current_sale)
-        li.append(mean_newPrice)
-        li.append(product['size'])
-        result.append(li)
-
-    return result
+        return f'{ram}GB RAM | {ssd}GB/TB SSD + {hdd}GB/TB HDD'
